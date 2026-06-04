@@ -110,6 +110,11 @@ flatten/ExtractNewRecordState SMT is needed downstream of this one.
   UPSERT-mode sink with `behavior.on.null.values=delete` removes the document.
   No embedding calls.
 - **Both null:** treated as no-op → drop.
+- **Non-string embedded column:** an embedded column whose value is not a string
+  (and not null) is a configuration/data error → throw `ConnectException`
+  (schema types aren't known at `configure()` time, so this is enforced at
+  `apply()`). A `null` value for a changed embedded column is emitted with a
+  `null` embedding vector (nothing to embed).
 
 ## Configuration
 
