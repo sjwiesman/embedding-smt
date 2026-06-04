@@ -45,7 +45,8 @@ public final class RetryingEmbeddingClient {
     }
 
     private void backoff(int attempt) {
-        long delay = backoffMs * (1L << attempt); // exponential: base * 2^attempt
+        long shift = Math.min(attempt, 30); // cap to avoid 1L << attempt overflowing
+        long delay = backoffMs * (1L << shift); // exponential: base * 2^shift
         try {
             sleeper.sleep(delay);
         } catch (InterruptedException ie) {

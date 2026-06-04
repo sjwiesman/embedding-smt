@@ -63,7 +63,8 @@ public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Trans
         Struct after = envelope.getStruct(afterField);
 
         if (after == null) {
-            return tombstone(record); // delete
+            // delete -> tombstone; but a record with neither before nor after is a no-op
+            return before == null ? null : tombstone(record);
         }
 
         Set<String> changed = RecordDiffer.changedColumns(before, after);

@@ -48,4 +48,21 @@ class OutputSchemaCacheTest {
         Schema second = cache.schemaFor(AFTER, set("body"));
         assertThat(first).isSameAs(second);
     }
+
+    @Test
+    void differentAfterSchemasProduceDistinctSchemas() {
+        OutputSchemaCache cache = new OutputSchemaCache(set("title", "body"), "_embedding");
+        Schema evolved = SchemaBuilder.struct()
+                .field("title", Schema.STRING_SCHEMA)
+                .field("body", Schema.STRING_SCHEMA)
+                .field("views", Schema.INT64_SCHEMA) // type evolved INT32 -> INT64
+                .build();
+
+        Schema fromOriginal = cache.schemaFor(AFTER, set("views"));
+        Schema fromEvolved = cache.schemaFor(evolved, set("views"));
+
+        assertThat(fromOriginal.field("views").schema().type()).isEqualTo(Schema.Type.INT32);
+        assertThat(fromEvolved.field("views").schema().type()).isEqualTo(Schema.Type.INT64);
+        assertThat(fromOriginal).isNotSameAs(fromEvolved);
+    }
 }

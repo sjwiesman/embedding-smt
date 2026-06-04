@@ -94,6 +94,43 @@ class EmbeddingDiffTransformTest {
     }
 
     @Test
+    void bothNullIsDropped() {
+        SourceRecord out = transform.apply(record(null, null));
+        assertThat(out).isNull();
+        assertThat(stub.inputs).isEmpty();
+    }
+
+    @Test
+    void nullChangedEmbeddedColumnEmitsNullVectorWithoutEmbedding() {
+        Schema optRow = SchemaBuilder.struct().name("OptRow")
+                .field("body", SchemaBuilder.string().optional().build())
+                .optional()
+                .build();
+        Schema optEnv = SchemaBuilder.struct().name("OptEnv")
+                .field("before", optRow)
+                .field("after", optRow)
+                .build();
+
+        Struct before = new Struct(optRow).put("body", "had-text");
+        Struct after = new Struct(optRow).put("body", null);
+        Struct env = new Struct(optEnv).put("before", before).put("after", after);
+        SourceRecord in = new SourceRecord(null, null, "topic", 0,
+                Schema.STRING_SCHEMA, "doc-1", optEnv, env);
+
+        SourceRecord out = transform.apply(in);
+
+        // body changed (text -> null), so the record flows
+        assertThat(out).isNotNull();
+        Struct value = (Struct) out.value();
+        assertThat(value.schema().field("body")).isNotNull();
+        assertThat(value.get("body")).isNull();
+        // body is embedded, but value is null -> null vector, and NO embed() call made
+        assertThat(value.schema().field("body_embedding")).isNotNull();
+        assertThat(value.get("body_embedding")).isNull();
+        assertThat(stub.inputs).isEmpty();
+    }
+
+    @Test
     void changedEmbeddedColumnIsEmbeddedAndEmittedFlat() {
         SourceRecord out = transform.apply(record(row("a", "b", 1), row("a", "B2", 1)));
 
