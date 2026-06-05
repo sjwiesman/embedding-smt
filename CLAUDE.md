@@ -1,0 +1,88 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+A Kafka Connect Single Message Transform (SMT) that converts a CDC `before`/`after`
+envelope into a minimal, embedding-enriched diff for sinks running in UPSERT mode. It
+emits a flat struct containing **only the changed columns** (plus a `<col>_embedding`
+vector for any changed column configured as embedded), so an UPSERT sink merges the diff
+and leaves unchanged columns — including their embeddings — untouched. This packages as a
+connector plugin jar; it is not a standalone app.
+
+## Commands
+
+```bash
+mvn clean package   # run tests + produce shaded plugin jar in target/
+mvn test            # tests only
+mvn test -Dtest=RecordDifferTest                       # single test class
+mvn test -Dtest=EmbeddingDiffTransformTest#methodName  # single test method
+```
+
+`java` is not on `PATH` here — Maven needs `JAVA_HOME` set explicitly:
+
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk mvn clean package
+```
+
+The shaded jar (`target/embedding-diff-smt-0.1.0-SNAPSHOT.jar`) bundles Jackson but
+**not** the Connect API (`provided` scope — the runtime supplies it).
+
+## End-to-end example
+
+`example/` runs the full pipeline (Materialize → Redpanda → Kafka Connect + this SMT →
+Elasticsearch, with a mock OpenAI endpoint) via Docker Compose. From the repo root:
+
+```bash
+docker compose -f example/docker-compose.yml up --build
+```
+
+It auto-bootstraps and a `verify` container asserts the diff/embedding-preservation
+behavior, then exits 0. See `example/README.md`.
+
+## Architecture
+
+The transform pipeline lives in `src/main/java/com/materialize/connect/smt/embedding/`.
+`EmbeddingDiffTransform.apply()` is the orchestrator and the file to read first; it
+delegates to focused collaborators:
+
+- **EmbeddingDiffTransform** — the SMT entry point. Per record: null value → pass through
+  (already a tombstone); `after == null` → tombstone if `before` existed, else drop
+  (both-null is a no-op); otherwise diff, build the pruned output struct, and embed
+  changed embedded columns. The key is always passed through unchanged (it is the
+  downstream document ID).
+- **RecordDiffer** — pure static diff: which fields of `after` differ from `before`.
+  Null `before` (create/snapshot) ⇒ all fields changed. Fields present in `before` but
+  dropped from `after` also count as changed (emitted as null).
+- **OutputSchemaCache** — builds and caches pruned output schemas keyed by
+  `(beforeSchema, afterSchema, changedColumns)`. Embedding fields are always
+  `ARRAY<FLOAT32>` optional. Columns dropped between before/after are copied as nullable.
+- **EmbeddingProvider** — pluggable backend resolved by `name()` via `java.util.ServiceLoader`.
+  Registered impls are listed in
+  `src/main/resources/META-INF/services/...EmbeddingProvider`. **OpenAiEmbeddingProvider**
+  (`provider/`) is the only shipped impl (`name() == "openai"`, OpenAI-compatible over
+  `java.net.http`). To add a provider: implement the interface and add its FQCN to that
+  services file.
+- **RetryingEmbeddingClient** — wraps a provider with exponential backoff. `Sleeper` is a
+  seam so tests avoid real sleeping.
+- **EmbeddingDiffConfig** — typed `AbstractConfig` view; `CONFIG_DEF` is the single source
+  of truth for config keys/defaults (mirrored in README's config table).
+
+### Error-handling contract
+
+Provider `embed()` distinguishes failure modes via exceptions, and this distinction drives
+retry behavior — preserve it when editing providers or the client:
+
+- **RetriableEmbeddingException** (transient: HTTP 429/5xx, IO) → retried, then rethrown as
+  Connect `RetriableException` after `max.retries`.
+- **FatalEmbeddingException** (permanent: 4xx, parse/serialize failures) → rethrown
+  immediately as `ConnectException`, no retries.
+
+## Conventions
+
+- Java 17 (`release 17`), Maven, JUnit 5 + AssertJ. Provider HTTP is tested against
+  `mockwebserver`.
+- Collaborators are constructor-injected and seams are exposed (`createProvider` is
+  `protected` and overridable; `Sleeper` is injectable) specifically for unit testing —
+  follow that pattern rather than reaching for static state or real network/sleep calls.
