@@ -1,4 +1,4 @@
-# embedding-diff-smt
+# embedding-smt
 
 A Kafka Connect [Single Message Transform](https://docs.confluent.io/platform/current/connect/transforms/overview.html)
 (SMT) that turns a CDC `before`/`after` envelope into a minimal, embedding-enriched
@@ -143,37 +143,3 @@ With `INSERT` (the default), each record fully replaces the document — omitted
 would be lost, defeating the diff. `behavior.on.null.values=delete` makes the tombstones
 emitted for CDC deletes remove the document.
 
----
-
-## Failure behavior
-
-- **Transient** embedding failures (HTTP 429, 5xx, I/O, timeout): retried with capped
-  exponential backoff up to `max.retries`, then re-thrown as a Connect `RetriableException`
-  so the worker's retry/tolerance machinery takes over.
-- **Permanent** failures (HTTP 400/401/403): thrown immediately as a `ConnectException`.
-- Ultimate disposition is controlled by the standard
-  `errors.tolerance` / `errors.deadletterqueue.*` connector settings. The SMT never
-  silently drops a changed record or forwards it without a required embedding.
-
-> The embedding call is **synchronous** and runs inline in the connector task thread, so
-> connector throughput is coupled to embedding-service latency. For high-throughput
-> pipelines, consider a stream-processing job (Flink / Kafka Streams) instead.
-
----
-
-## Adding another embedding provider
-
-Implement `com.materialize.connect.smt.embedding.EmbeddingProvider`, give it a unique
-`name()`, and register it in
-`META-INF/services/com.materialize.connect.smt.embedding.EmbeddingProvider`. Select it at
-runtime with `transforms.<name>.provider=<your-name>`.
-
-> Anthropic has no first-party embeddings API; [Voyage AI](https://www.voyageai.com/) is
-> its recommended partner and a natural next provider.
-
----
-
-## Documentation
-
-- Design spec: [`docs/superpowers/specs/2026-06-04-embedding-diff-smt-design.md`](docs/superpowers/specs/2026-06-04-embedding-diff-smt-design.md)
-- Implementation plan: [`docs/superpowers/plans/2026-06-04-embedding-diff-smt.md`](docs/superpowers/plans/2026-06-04-embedding-diff-smt.md)

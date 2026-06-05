@@ -46,4 +46,36 @@ class RecordDifferTest {
         assertThat(RecordDiffer.changedColumns(null, after))
                 .containsExactlyInAnyOrder("title", "body", "views");
     }
+
+    @Test
+    void newColumnsInAfterAreReportedAsChanged() {
+        Schema beforeSchema = SchemaBuilder.struct()
+                .field("title", Schema.STRING_SCHEMA)
+                .build();
+        Schema afterSchema = SchemaBuilder.struct()
+                .field("title", Schema.STRING_SCHEMA)
+                .field("body", Schema.STRING_SCHEMA)
+                .build();
+
+        Struct before = new Struct(beforeSchema).put("title", "a");
+        Struct after = new Struct(afterSchema).put("title", "a").put("body", "b");
+
+        assertThat(RecordDiffer.changedColumns(before, after)).containsExactly("body");
+    }
+
+    @Test
+    void removedColumnsAreReportedAsChanged() {
+        Schema beforeSchema = SchemaBuilder.struct()
+                .field("title", Schema.STRING_SCHEMA)
+                .field("body", Schema.STRING_SCHEMA)
+                .build();
+        Schema afterSchema = SchemaBuilder.struct()
+                .field("title", Schema.STRING_SCHEMA)
+                .build();
+
+        Struct before = new Struct(beforeSchema).put("title", "a").put("body", "b");
+        Struct after = new Struct(afterSchema).put("title", "a");
+
+        assertThat(RecordDiffer.changedColumns(before, after)).containsExactly("body");
+    }
 }

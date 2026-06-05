@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.materialize.connect.smt.embedding.EmbeddingProvider;
 import com.materialize.connect.smt.embedding.FatalEmbeddingException;
 import com.materialize.connect.smt.embedding.RetriableEmbeddingException;
+import org.apache.kafka.common.config.ConfigException;
 
 import java.io.IOException;
 import java.net.URI;
@@ -37,6 +38,9 @@ public final class OpenAiEmbeddingProvider implements EmbeddingProvider {
     @Override
     public void configure(Map<String, ?> configs) {
         this.apiKey = str(configs, "openai.api.key", null);
+        if (apiKey == null || apiKey.isBlank()) {
+            throw new ConfigException("openai.api.key", apiKey, "OpenAI API key must be configured");
+        }
         this.model = str(configs, "openai.model", "text-embedding-3-small");
         this.endpoint = str(configs, "openai.endpoint", "https://api.openai.com/v1/embeddings");
         String dims = str(configs, "openai.dimensions", null);

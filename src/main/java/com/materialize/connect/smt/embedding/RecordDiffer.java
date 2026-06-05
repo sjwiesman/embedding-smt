@@ -26,9 +26,21 @@ public final class RecordDiffer {
                 changed.add(name);
                 continue;
             }
-            Object beforeValue = before.get(name);
+            Field beforeField = before.schema().field(name);
+            if (beforeField == null) {
+                changed.add(name);
+                continue;
+            }
+            Object beforeValue = before.get(beforeField);
             if (!Objects.equals(beforeValue, afterValue)) {
                 changed.add(name);
+            }
+        }
+        if (before != null) {
+            for (Field field : before.schema().fields()) {
+                if (after.schema().field(field.name()) == null) {
+                    changed.add(field.name());
+                }
             }
         }
         return changed;

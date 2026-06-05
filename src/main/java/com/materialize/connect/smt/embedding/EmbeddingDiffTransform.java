@@ -72,7 +72,7 @@ public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Trans
             return null; // nothing changed -> drop
         }
 
-        Schema outSchema = schemaCache.schemaFor(after.schema(), changed);
+        Schema outSchema = schemaCache.schemaFor(before == null ? null : before.schema(), after.schema(), changed);
         Struct outValue = new Struct(outSchema);
         for (Field field : after.schema().fields()) {
             String name = field.name();
@@ -83,6 +83,18 @@ public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Trans
             outValue.put(name, value);
             if (embeddedColumns.contains(name)) {
                 outValue.put(name + suffix, embedColumn(name, value));
+            }
+        }
+        if (before != null) {
+            for (Field field : before.schema().fields()) {
+                String name = field.name();
+                if (after.schema().field(name) != null || !changed.contains(name)) {
+                    continue;
+                }
+                outValue.put(name, null);
+                if (embeddedColumns.contains(name)) {
+                    outValue.put(name + suffix, null);
+                }
             }
         }
 

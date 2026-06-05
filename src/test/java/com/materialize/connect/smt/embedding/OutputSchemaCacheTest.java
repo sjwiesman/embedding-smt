@@ -24,7 +24,7 @@ class OutputSchemaCacheTest {
     @Test
     void prunedSchemaContainsOnlyChangedColumnsPlusEmbeddings() {
         OutputSchemaCache cache = new OutputSchemaCache(set("title", "body"), "_embedding");
-        Schema schema = cache.schemaFor(AFTER, set("body", "views"));
+        Schema schema = cache.schemaFor(AFTER, AFTER, set("body", "views"));
 
         // changed source columns: body, views
         assertThat(schema.field("body")).isNotNull();
@@ -44,8 +44,8 @@ class OutputSchemaCacheTest {
     @Test
     void sameChangedSetReturnsCachedInstance() {
         OutputSchemaCache cache = new OutputSchemaCache(set("title", "body"), "_embedding");
-        Schema first = cache.schemaFor(AFTER, set("body"));
-        Schema second = cache.schemaFor(AFTER, set("body"));
+        Schema first = cache.schemaFor(AFTER, AFTER, set("body"));
+        Schema second = cache.schemaFor(AFTER, AFTER, set("body"));
         assertThat(first).isSameAs(second);
     }
 
@@ -58,11 +58,29 @@ class OutputSchemaCacheTest {
                 .field("views", Schema.INT64_SCHEMA) // type evolved INT32 -> INT64
                 .build();
 
-        Schema fromOriginal = cache.schemaFor(AFTER, set("views"));
-        Schema fromEvolved = cache.schemaFor(evolved, set("views"));
+        Schema fromOriginal = cache.schemaFor(AFTER, AFTER, set("views"));
+        Schema fromEvolved = cache.schemaFor(evolved, evolved, set("views"));
 
         assertThat(fromOriginal.field("views").schema().type()).isEqualTo(Schema.Type.INT32);
         assertThat(fromEvolved.field("views").schema().type()).isEqualTo(Schema.Type.INT64);
         assertThat(fromOriginal).isNotSameAs(fromEvolved);
+    }
+
+    @Test
+    void removedColumnsUseNullableSchemaFromBefore() {
+        OutputSchemaCache cache = new OutputSchemaCache(set("body"), "_embedding");
+        Schema before = SchemaBuilder.struct()
+                .field("title", Schema.STRING_SCHEMA)
+                .field("body", Schema.STRING_SCHEMA)
+                .build();
+        Schema after = SchemaBuilder.struct()
+                .field("title", Schema.STRING_SCHEMA)
+                .build();
+
+        Schema schema = cache.schemaFor(before, after, set("body"));
+
+        assertThat(schema.field("body")).isNotNull();
+        assertThat(schema.field("body").schema().isOptional()).isTrue();
+        assertThat(schema.field("body_embedding")).isNotNull();
     }
 }

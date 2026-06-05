@@ -76,6 +76,14 @@ class EmbeddingDiffTransformTest {
                 Schema.STRING_SCHEMA, "doc-1", ENVELOPE, envelope);
     }
 
+    private SourceRecord record(Schema envelopeSchema, Struct before, Struct after) {
+        Struct envelope = new Struct(envelopeSchema);
+        if (before != null) envelope.put("before", before);
+        if (after != null) envelope.put("after", after);
+        return new SourceRecord(null, null, "topic", 0,
+                Schema.STRING_SCHEMA, "doc-1", envelopeSchema, envelope);
+    }
+
     @Test
     void dropsRecordWhenNothingChanged() {
         SourceRecord out = transform.apply(record(row("a", "b", 1), row("a", "b", 1)));
@@ -162,6 +170,58 @@ class EmbeddingDiffTransformTest {
         Struct value = (Struct) out.value();
         assertThat(value.getArray("title_embedding")).containsExactly(1.0f, 2.0f);
         assertThat(value.getArray("body_embedding")).containsExactly(1.0f, 2.0f);
+    }
+
+    @Test
+    void addedColumnDoesNotCrashAndIsEmitted() {
+        Schema beforeRow = SchemaBuilder.struct().name("BeforeRow")
+                .field("title", Schema.STRING_SCHEMA)
+                .build();
+        Schema afterRow = SchemaBuilder.struct().name("AfterRow")
+                .field("title", Schema.STRING_SCHEMA)
+                .field("body", Schema.STRING_SCHEMA)
+                .build();
+        Schema envelope = SchemaBuilder.struct().name("AddedColumnEnvelope")
+                .field("before", beforeRow)
+                .field("after", afterRow)
+                .build();
+
+        Struct before = new Struct(beforeRow).put("title", "same");
+        Struct after = new Struct(afterRow).put("title", "same").put("body", "new text");
+
+        SourceRecord out = transform.apply(record(envelope, before, after));
+
+        assertThat(stub.inputs).containsExactly("new text");
+        Struct value = (Struct) out.value();
+        assertThat(value.getString("body")).isEqualTo("new text");
+        assertThat(value.getArray("body_embedding")).containsExactly(1.0f, 2.0f);
+    }
+
+    @Test
+    void removedColumnEmitsNullToClearDownstreamValue() {
+        Schema beforeRow = SchemaBuilder.struct().name("BeforeRowRemoved")
+                .field("title", Schema.STRING_SCHEMA)
+                .field("body", Schema.STRING_SCHEMA)
+                .build();
+        Schema afterRow = SchemaBuilder.struct().name("AfterRowRemoved")
+                .field("title", Schema.STRING_SCHEMA)
+                .build();
+        Schema envelope = SchemaBuilder.struct().name("RemovedColumnEnvelope")
+                .field("before", beforeRow)
+                .field("after", afterRow)
+                .build();
+
+        Struct before = new Struct(beforeRow).put("title", "same").put("body", "old text");
+        Struct after = new Struct(afterRow).put("title", "same");
+
+        SourceRecord out = transform.apply(record(envelope, before, after));
+
+        assertThat(stub.inputs).isEmpty();
+        Struct value = (Struct) out.value();
+        assertThat(value.schema().field("body")).isNotNull();
+        assertThat(value.schema().field("body").schema().isOptional()).isTrue();
+        assertThat(value.get("body")).isNull();
+        assertThat(value.get("body_embedding")).isNull();
     }
 
     @Test

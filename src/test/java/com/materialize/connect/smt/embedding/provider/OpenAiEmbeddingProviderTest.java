@@ -5,6 +5,7 @@ import com.materialize.connect.smt.embedding.RetriableEmbeddingException;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
+import org.apache.kafka.common.config.ConfigException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,16 @@ class OpenAiEmbeddingProviderTest {
     @Test
     void nameIsOpenai() {
         assertThat(new OpenAiEmbeddingProvider().name()).isEqualTo("openai");
+    }
+
+    @Test
+    void missingApiKeyFailsFastAtConfigureTime() {
+        OpenAiEmbeddingProvider provider = new OpenAiEmbeddingProvider();
+        assertThatThrownBy(() -> provider.configure(Map.of(
+                "openai.model", "text-embedding-3-small",
+                "openai.endpoint", server.url("/v1/embeddings").toString(),
+                "request.timeout.ms", "5000")))
+                .isInstanceOf(ConfigException.class);
     }
 
     @Test
