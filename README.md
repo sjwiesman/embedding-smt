@@ -25,28 +25,62 @@ the box.
 
 ---
 
-## Requirements
+## Compatibility
 
-- **JDK 17+** (compiled to `release 17`; tested on JDK 26)
-- **Maven 3.9+**
-- A Kafka Connect runtime (this is a connector plugin, not a standalone app)
+| | |
+|---|---|
+| **Java** | 17+ (compiled to `release 17`) |
+| **Kafka / Connect** | built against `connect-api` 3.8.1; works on any Connect runtime with [KIP-146](https://cwiki.apache.org/confluence/display/KAFKA/KIP-146+-+Classloading+Isolation+in+Connect) classloader isolation (Apache Kafka 2.3+ / Confluent Platform 5.3+) |
+| **Packaging** | self-contained plugin folder; bundles Jackson, Connect API is `provided` by the worker |
 
 ---
 
-## Build
+## Install
+
+### From a release (recommended)
+
+1. **Download** the plugin archive from the
+   [Releases page](https://github.com/sjwiesman/embedding-smt/releases) —
+   `embedding-diff-smt-<version>.zip` — and (optionally) verify its checksum:
+
+   ```bash
+   sha256sum -c embedding-diff-smt-<version>.zip.sha256
+   ```
+
+2. **Extract** the `embedding-diff-smt/` folder into a directory on the Connect worker's
+   `plugin.path`:
+
+   ```bash
+   unzip embedding-diff-smt-<version>.zip -d /usr/local/share/kafka/plugins/
+   ```
+
+   This yields `/usr/local/share/kafka/plugins/embedding-diff-smt/lib/…`. Ensure the worker
+   config includes that root:
+
+   ```properties
+   plugin.path=/usr/local/share/kafka/plugins
+   ```
+
+3. **Restart** the Connect worker(s) so the plugin is discovered.
+
+4. **Add the transform** to your sink connector config (see below).
+
+### From source
 
 ```bash
 mvn clean package
 ```
 
-This runs the tests and produces a shaded plugin jar:
+This runs the tests and produces both a shaded plugin jar and the distributable plugin
+archive:
 
 ```
-target/embedding-diff-smt-0.1.0-SNAPSHOT.jar
+target/embedding-diff-smt-<version>.jar   # shaded jar (Jackson bundled)
+target/embedding-diff-smt-<version>.zip   # plugin folder: extract into plugin.path
 ```
 
-The jar bundles its runtime dependencies (Jackson) but **not** the Kafka Connect API
-(`provided` scope — the Connect runtime supplies it).
+Install the `.zip` exactly as in the release flow above, or drop the shaded jar into a
+`plugin.path/embedding-diff-smt/` directory yourself.
 
 > **Note:** if `java` is not on your `PATH`, point Maven at a JDK explicitly:
 >
@@ -54,34 +88,11 @@ The jar bundles its runtime dependencies (Jackson) but **not** the Kafka Connect
 > JAVA_HOME=/path/to/jdk mvn clean package
 > ```
 
-### Run the tests only
+Run the tests only:
 
 ```bash
 mvn test
 ```
-
----
-
-## Deploy
-
-1. **Install the plugin.** Copy the shaded jar into a directory on the Connect worker's
-   `plugin.path`:
-
-   ```bash
-   mkdir -p /usr/local/share/kafka/plugins/embedding-diff-smt
-   cp target/embedding-diff-smt-0.1.0-SNAPSHOT.jar \
-      /usr/local/share/kafka/plugins/embedding-diff-smt/
-   ```
-
-   Ensure the worker config includes that root:
-
-   ```properties
-   plugin.path=/usr/local/share/kafka/plugins
-   ```
-
-2. **Restart** the Connect worker(s) so the plugin is discovered.
-
-3. **Add the transform** to your sink connector config (see below).
 
 ---
 

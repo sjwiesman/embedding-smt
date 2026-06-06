@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.1.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.1.0 http://maven.apache.org/xsd/assembly-2.1.0.xsd">
+  <!--
+    Builds a self-contained Kafka Connect plugin folder, zipped for distribution via
+    GitHub Releases. The user extracts the top-level embedding-diff-smt/ directory into a
+    directory on the Connect worker's plugin.path. The shaded jar (which bundles Jackson)
+    is the only artifact in lib/; the Connect API is provided by the worker.
+
+    Layout:
+      embedding-diff-smt/
+      ├── lib/embedding-diff-smt-<version>.jar
+      ├── LICENSE
+      ├── NOTICE
+      └── README.md
+  -->
+  <id>plugin</id>
+  <formats>
+    <format>zip</format>
+  </formats>
+  <baseDirectory>embedding-diff-smt</baseDirectory>
+
+  <files>
+    <!-- The shaded jar produced by maven-shade-plugin in the same package phase. -->
+    <file>
+      <source>${project.build.directory}/${project.build.finalName}.jar</source>
+      <outputDirectory>lib</outputDirectory>
+    </file>
+  </files>
+
+  <fileSets>
+    <fileSet>
+      <directory>${project.basedir}</directory>
+      <outputDirectory>.</outputDirectory>
+      <includes>
+        <include>LICENSE</include>
+        <include>NOTICE</include>
+        <include>README.md</include>
+      </includes>
+    </fileSet>
+  </fileSets>
+</assembly>

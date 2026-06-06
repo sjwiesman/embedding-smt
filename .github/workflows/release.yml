@@ -1,0 +1,48 @@
+name: release
+
+# Cut a release by pushing a semver tag, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+# This builds the plugin archive at the tagged version and publishes it as a
+# GitHub Release asset (plus a SHA256 checksum). No secrets are required.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Derive version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set project version
+        run: mvn --batch-mode --no-transfer-progress versions:set -DnewVersion=${{ steps.version.outputs.version }} -DgenerateBackupPoms=false
+
+      - name: Build plugin archive
+        run: mvn --batch-mode --no-transfer-progress clean package
+
+      - name: Checksum
+        working-directory: target
+        run: sha256sum embedding-diff-smt-${{ steps.version.outputs.version }}.zip > embedding-diff-smt-${{ steps.version.outputs.version }}.zip.sha256
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/embedding-diff-smt-${{ steps.version.outputs.version }}.zip
+            target/embedding-diff-smt-${{ steps.version.outputs.version }}.zip.sha256
+          generate_release_notes: true

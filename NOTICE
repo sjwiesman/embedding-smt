@@ -1,0 +1,20 @@
+embedding-diff-smt
+Copyright 2026 Materialize, Inc.
+
+This product includes software developed at Materialize, Inc.
+(https://materialize.com/).
+
+Licensed under the Apache License, Version 2.0 (the "License"); see the LICENSE
+file in this distribution for the full license text.
+
+------------------------------------------------------------------------------
+Third-party dependencies bundled in the shaded plugin jar
+------------------------------------------------------------------------------
+
+This distribution bundles the following third-party software in its shaded jar.
+Each is distributed under its own license, included here by reference.
+
+Jackson (jackson-databind, jackson-core, jackson-annotations)
+  Copyright FasterXML, LLC.
+  Licensed under the Apache License, Version 2.0.
+  https://github.com/FasterXML/jackson
