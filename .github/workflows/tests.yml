@@ -19,5 +19,8 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Check formatting
+        run: mvn --batch-mode --no-transfer-progress spotless:check
+
       - name: Build and test
         run: mvn --batch-mode --no-transfer-progress clean package

@@ -18,7 +18,14 @@ mvn clean package   # run tests + produce shaded plugin jar in target/
 mvn test            # tests only
 mvn test -Dtest=RecordDifferTest                       # single test class
 mvn test -Dtest=EmbeddingDiffTransformTest#methodName  # single test method
+mvn spotless:apply  # auto-format (google-java-format)
+mvn spotless:check  # fail if any file is unformatted (run in CI)
 ```
+
+Code is formatted with [Spotless](https://github.com/diffplug/spotless) using
+google-java-format; CI fails on unformatted code, so run `spotless:apply` before
+committing. google-java-format is pinned to a version recent enough for the local JDK 26;
+older versions fail with a javac internal-API `NoSuchMethodError`.
 
 `java` is not on `PATH` here — Maven needs `JAVA_HOME` set explicitly:
 
