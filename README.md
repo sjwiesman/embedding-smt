@@ -26,6 +26,32 @@ the box.
 
 ---
 
+## Embedding SPI
+
+The embedding backend is a small, dependency-free service-provider interface published as
+its own artifact, so you can implement your own provider without depending on the SMT:
+
+```xml
+<dependency>
+  <groupId>com.materialize</groupId>
+  <artifactId>embedding-spi</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
+
+Implement `com.materialize.embedding.spi.EmbeddingProvider` and register it for
+`java.util.ServiceLoader` by adding its fully-qualified class name to
+`META-INF/services/com.materialize.embedding.spi.EmbeddingProvider`. Select it at runtime
+with `transforms.embed.provider=<your name()>`. Throw `RetriableEmbeddingException` for
+transient failures (timeouts, 429, 5xx) and `FatalEmbeddingException` for permanent ones;
+the SMT retries the former and fails fast on the latter.
+
+This repository is a Maven reactor: `embedding-spi/` (the published SPI) and
+`embedding-diff-smt/` (the Connect plugin, which bundles the SPI). `mvn clean package` at
+the root builds both.
+
+---
+
 ## Source: Materialize Kafka sink
 
 This SMT expects its input topic to be fed by a Materialize Kafka sink declared with
