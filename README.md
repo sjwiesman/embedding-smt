@@ -1,13 +1,14 @@
 # embedding-smt
 
 A Kafka Connect [Single Message Transform](https://docs.confluent.io/platform/current/connect/transforms/overview.html)
-(SMT) that turns a CDC `before`/`after` envelope into a minimal, embedding-enriched
-diff for sinks running in UPSERT mode.
+(SMT) that turns a [Materialize](https://materialize.com/) Kafka sink's Debezium-style
+`before`/`after` envelope into a minimal, embedding-enriched diff for downstream sinks
+running in UPSERT mode.
 
 For each record it:
 
-1. Reads the `before` and `after` structs from a CDC envelope (typed `Struct` via
-   Schema Registry).
+1. Reads the `before` and `after` structs from the Materialize Debezium envelope (typed
+   `Struct` via Schema Registry).
 2. Computes which columns changed (per-column comparison).
 3. **Drops** the record if nothing changed.
 4. Emits a **flat struct containing only the changed columns**. For each changed
@@ -22,6 +23,41 @@ dropped.
 
 Embedding providers are pluggable via `java.util.ServiceLoader`. **OpenAI** ships in
 the box.
+
+---
+
+## Source: Materialize Kafka sink
+
+This SMT expects its input topic to be fed by a Materialize Kafka sink declared with
+`ENVELOPE DEBEZIUM` and Avro encoding. That envelope is what gives the transform the
+`before`/`after` row states it diffs, and `KEY (…)` is what becomes the downstream
+document ID.
+
+```sql
+CREATE CONNECTION kafka_connection TO KAFKA (BROKER 'redpanda:9092', SECURITY PROTOCOL = 'PLAINTEXT');
+CREATE CONNECTION csr_connection TO CONFLUENT SCHEMA REGISTRY (URL 'http://redpanda:8081');
+
+CREATE TABLE articles (id INT, title TEXT, body TEXT, views INT);
+
+CREATE SINK articles_sink
+    FROM articles
+    INTO KAFKA CONNECTION kafka_connection (TOPIC 'articles-cdc')
+    KEY (id) NOT ENFORCED                                    -- becomes the document ID
+    FORMAT AVRO USING CONFLUENT SCHEMA REGISTRY CONNECTION csr_connection
+    ENVELOPE DEBEZIUM;                                       -- required: emits before/after
+```
+
+Requirements this places on the source:
+
+- **`ENVELOPE DEBEZIUM`** — required. `ENVELOPE UPSERT` or `ENVELOPE NONE` do **not** carry
+  the `before`/`after` pair the diff is computed from.
+- **`FORMAT AVRO USING CONFLUENT SCHEMA REGISTRY`** — the SMT operates on typed Connect
+  `Struct`s, so the topic must carry a schema (use the Avro converter on the Connect side).
+- **`KEY (…)`** — declare the primary key. It flows through as the Kafka record key and is
+  used as the upsert document ID downstream (see [Sink requirements](#sink-requirements-important)).
+
+The envelope's row states are read from the `before` and `after` fields that Materialize's
+Debezium output always emits.
 
 ---
 
@@ -98,14 +134,57 @@ mvn test
 
 ## Connector configuration
 
+Add the SMT to the **sink** connector that reads the Materialize topic. A complete
+Elasticsearch sink config for the `articles-cdc` topic above looks like this (JSON form,
+as used by [`example/connect/connector-config.json`](example/connect/connector-config.json)):
+
+```json
+{
+  "name": "articles-elasticsearch-sink",
+  "config": {
+    "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
+    "topics": "articles-cdc",
+    "connection.url": "http://elasticsearch:9200",
+
+    "key.converter": "io.confluent.connect.avro.AvroConverter",
+    "key.converter.schema.registry.url": "http://redpanda:8081",
+    "value.converter": "io.confluent.connect.avro.AvroConverter",
+    "value.converter.schema.registry.url": "http://redpanda:8081",
+
+    "key.ignore": "false",
+    "schema.ignore": "false",
+    "write.method": "UPSERT",
+    "behavior.on.null.values": "delete",
+
+    "transforms": "extractKey,embed",
+
+    "transforms.extractKey.type": "org.apache.kafka.connect.transforms.ExtractField$Key",
+    "transforms.extractKey.field": "id",
+
+    "transforms.embed.type": "com.materialize.connect.smt.embedding.EmbeddingDiffTransform",
+    "transforms.embed.embedded.columns": "title,body",
+    "transforms.embed.provider": "openai",
+    "transforms.embed.openai.api.key": "${file:/opt/secrets/connect.properties:openai_api_key}",
+    "transforms.embed.openai.model": "text-embedding-3-small"
+  }
+}
+```
+
+**Transform ordering matters.** Materialize emits a *composite* Avro key (a struct of the
+`KEY (…)` columns, e.g. `{ "id": 1 }`). `ExtractField$Key` unwraps it to the scalar `id`
+so the sink uses a stable, flat document ID; the `embed` transform then passes that key
+through unchanged. List `extractKey` before `embed`.
+
+The equivalent `.properties` form for the SMT portion alone:
+
 ```properties
-transforms=embed
+transforms=extractKey,embed
+
+transforms.extractKey.type=org.apache.kafka.connect.transforms.ExtractField$Key
+transforms.extractKey.field=id
+
 transforms.embed.type=com.materialize.connect.smt.embedding.EmbeddingDiffTransform
-
-# Columns to embed (must be string columns)
 transforms.embed.embedded.columns=title,body
-
-# Embedding provider
 transforms.embed.provider=openai
 transforms.embed.openai.api.key=${file:/opt/secrets/connect.properties:openai_api_key}
 transforms.embed.openai.model=text-embedding-3-small
@@ -115,8 +194,6 @@ transforms.embed.openai.model=text-embedding-3-small
 
 | Key | Default | Description |
 |---|---|---|
-| `before.field` | `before` | Envelope field holding the prior row state |
-| `after.field` | `after` | Envelope field holding the new row state |
 | `embedded.columns` | *(required)* | Comma-separated string columns to embed |
 | `embedding.field.suffix` | `_embedding` | Output field = `<col>` + suffix |
 | `provider` | `openai` | `EmbeddingProvider` name (selected via `ServiceLoader`) |
@@ -127,6 +204,35 @@ transforms.embed.openai.model=text-embedding-3-small
 | `openai.model` | `text-embedding-3-small` | OpenAI embedding model |
 | `openai.endpoint` | `https://api.openai.com/v1/embeddings` | Override for proxies / Azure / gateways |
 | `openai.dimensions` | *(unset)* | Optional output-dimension override |
+| `metrics.id` | *(auto)* | Identifier used in the metrics MBean `ObjectName` (`id=...`). Defaults to an auto-assigned per-instance sequence; set it to a stable, readable value (e.g. the connector/transform alias) when running more than one instance in a worker |
+
+---
+
+## Metrics
+
+The SMT registers a JMX MBean exposing how many embedding calls it **avoided** versus a
+naive pipeline that re-embeds every configured column on every change event. It's a plain
+MBean on the platform MBeanServer, so it's scraped like any other Kafka Connect JMX metric
+(Prometheus [`jmx_exporter`](https://github.com/prometheus/jmx_exporter), JConsole, etc.).
+
+**ObjectName:** `com.materialize.connect.smt.embedding:type=EmbeddingDiff,id=<metrics.id>`
+
+| Attribute | Meaning |
+|---|---|
+| `EmbeddingsComputed` | Embedding API calls actually made |
+| `EmbeddingsSkipped` | Embedding API calls avoided — dropped (unchanged) records, unchanged columns within a changed record, and changed-to-null columns |
+| `EmbeddingsPossible` | Calls a naive re-embed-everything pipeline would have made (`= EmbeddingsComputed + EmbeddingsSkipped`) |
+| `SkipRatio` | `EmbeddingsSkipped / EmbeddingsPossible` (0.0 when idle) — e.g. `0.83` means 83% of embedding calls were avoided |
+
+**Baseline:** `EmbeddingsPossible` counts every configured embedded column present in a
+record's `after` for each insert/update. Deletes, tombstones, and both-null records embed
+nothing, so they don't contribute. This makes `SkipRatio` the share of *embeddable* work
+the diff avoided.
+
+Since a Connect SMT has no access to the connector name or task id, each instance gets a
+unique `id` automatically. Set `metrics.id` to give it a stable, readable name when a
+worker runs more than one instance (`tasks.max > 1`, or the SMT used by multiple
+connectors).
 
 ---
 
@@ -134,7 +240,9 @@ transforms.embed.openai.model=text-embedding-3-small
 
 The SMT's "leave unchanged columns alone" guarantee only holds if the sink performs a
 **partial update (UPSERT)** keyed by the document ID, and the **Kafka record key is the
-document ID**.
+document ID** — which is why the example unwraps Materialize's composite Avro key with
+`ExtractField$Key` (see [Connector configuration](#connector-configuration)) before the
+sink writes it.
 
 **Elasticsearch sink:**
 
@@ -153,4 +261,19 @@ behavior.on.null.values=delete
 With `INSERT` (the default), each record fully replaces the document — omitted columns
 would be lost, defeating the diff. `behavior.on.null.values=delete` makes the tombstones
 emitted for CDC deletes remove the document.
+
+---
+
+## End-to-end example
+
+[`example/`](example/) runs the whole intended pipeline with Docker Compose: Materialize
+(`ENVELOPE DEBEZIUM` sink) → Redpanda (Kafka + Schema Registry) → Kafka Connect with this
+SMT → Elasticsearch, plus a mock OpenAI endpoint. A `verify` container asserts the
+diff/embedding-preservation behavior and exits 0. From the repo root:
+
+```bash
+docker compose -f example/docker-compose.yml up --build
+```
+
+See [`example/README.md`](example/README.md) for details.
 

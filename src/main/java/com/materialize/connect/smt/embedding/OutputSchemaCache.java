@@ -10,7 +10,12 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 
-/** Builds and caches pruned output schemas keyed by (afterSchema, changedColumns). */
+/**
+ * The factory and cache for the Connect schemas of the diff records the SMT emits. Each output
+ * schema describes the flat struct of changed columns (plus their embedding fields) for a given
+ * input shape; reusing cached instances keeps the transform's hot path allocation-free for repeated
+ * record shapes.
+ */
 public final class OutputSchemaCache {
 
   private static final Schema EMBEDDING_SCHEMA =
@@ -56,18 +61,12 @@ public final class OutputSchemaCache {
   }
 
   private static Schema nullableCopy(Schema schema) {
-    SchemaBuilder builder;
-    switch (schema.type()) {
-      case ARRAY:
-        builder = SchemaBuilder.array(schema.valueSchema());
-        break;
-      case MAP:
-        builder = SchemaBuilder.map(schema.keySchema(), schema.valueSchema());
-        break;
-      default:
-        builder = SchemaBuilder.type(schema.type());
-        break;
-    }
+    var builder =
+        switch (schema.type()) {
+          case ARRAY -> SchemaBuilder.array(schema.valueSchema());
+          case MAP -> SchemaBuilder.map(schema.keySchema(), schema.valueSchema());
+          default -> SchemaBuilder.type(schema.type());
+        };
     if (schema.name() != null) {
       builder.name(schema.name());
     }
@@ -80,14 +79,10 @@ public final class OutputSchemaCache {
     if (schema.parameters() != null) {
       builder.parameters(schema.parameters());
     }
-    switch (schema.type()) {
-      case STRUCT:
-        for (Field field : schema.fields()) {
-          builder.field(field.name(), field.schema());
-        }
-        break;
-      default:
-        break;
+    if (schema.type() == Schema.Type.STRUCT) {
+      for (Field field : schema.fields()) {
+        builder.field(field.name(), field.schema());
+      }
     }
     return builder.optional().build();
   }

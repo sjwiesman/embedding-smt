@@ -17,7 +17,11 @@ import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigException;
 
-/** OpenAI-compatible embeddings provider over java.net.http. */
+/**
+ * The built-in {@link EmbeddingProvider} backed by OpenAI's embeddings REST API (or any
+ * OpenAI-compatible endpoint, such as a proxy, gateway, or Azure deployment). This is the default
+ * provider shipped with the plugin and the one selected when {@code provider=openai}.
+ */
 public final class OpenAiEmbeddingProvider implements EmbeddingProvider {
 
   private static final ObjectMapper MAPPER = new ObjectMapper();

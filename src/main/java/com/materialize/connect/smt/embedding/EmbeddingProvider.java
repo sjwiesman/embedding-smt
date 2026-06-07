@@ -4,8 +4,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Pluggable embedding backend, discovered via {@link java.util.ServiceLoader}. The implementation
- * whose {@link #name()} matches the {@code provider} config is selected.
+ * The plugin's extension point for embedding backends: a service that turns a piece of text into an
+ * embedding vector. Implementations are discovered at runtime via {@link java.util.ServiceLoader}
+ * and selected by matching {@link #name()} against the {@code provider} configuration.
+ * <b>OpenAI</b> ships in the box ({@link
+ * com.materialize.connect.smt.embedding.provider.OpenAiEmbeddingProvider}); additional backends can
+ * be added by registering new implementations.
  */
 public interface EmbeddingProvider extends AutoCloseable {
 

@@ -8,23 +8,15 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
-/** Typed view over the SMT configuration. */
+/**
+ * The configuration contract for {@link EmbeddingDiffTransform}. It declares every connector
+ * property the SMT accepts — their keys, types, defaults, and importance — and exposes typed
+ * accessors for reading them. The single source of truth behind the transform's {@code config()}.
+ */
 public final class EmbeddingDiffConfig extends AbstractConfig {
 
   public static final ConfigDef CONFIG_DEF =
       new ConfigDef()
-          .define(
-              "before.field",
-              Type.STRING,
-              "before",
-              Importance.MEDIUM,
-              "Envelope field holding the prior row state.")
-          .define(
-              "after.field",
-              Type.STRING,
-              "after",
-              Importance.MEDIUM,
-              "Envelope field holding the new row state.")
           .define(
               "embedded.columns",
               Type.LIST,
@@ -84,18 +76,17 @@ public final class EmbeddingDiffConfig extends AbstractConfig {
               Type.INT,
               null,
               Importance.LOW,
-              "Optional output-dimension override.");
+              "Optional output-dimension override.")
+          .define(
+              "metrics.id",
+              Type.STRING,
+              null,
+              Importance.LOW,
+              "Optional stable identifier used in the metrics MBean ObjectName (id=...). "
+                  + "Defaults to an auto-assigned per-instance sequence.");
 
   public EmbeddingDiffConfig(Map<String, ?> originals) {
     super(CONFIG_DEF, originals);
-  }
-
-  public String beforeField() {
-    return getString("before.field");
-  }
-
-  public String afterField() {
-    return getString("after.field");
   }
 
   public String embeddingFieldSuffix() {
@@ -116,5 +107,9 @@ public final class EmbeddingDiffConfig extends AbstractConfig {
 
   public Set<String> embeddedColumns() {
     return new LinkedHashSet<>(getList("embedded.columns"));
+  }
+
+  public String metricsId() {
+    return getString("metrics.id");
   }
 }

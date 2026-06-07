@@ -6,7 +6,11 @@ import java.util.Set;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Struct;
 
-/** Computes which columns of {@code after} differ from {@code before}. */
+/**
+ * Stateless utility that identifies which columns changed between the {@code before} and {@code
+ * after} states of a CDC row. The column-level diff at the heart of the transform — the set it
+ * produces decides what the SMT emits and what it re-embeds.
+ */
 public final class RecordDiffer {
 
   private RecordDiffer() {}

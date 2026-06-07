@@ -260,4 +260,65 @@ class EmbeddingDiffTransformTest {
     assertThatThrownBy(() -> transform.apply(record(row("a", "b", 1), row("a", "b", 2))))
         .isInstanceOf(ConnectException.class);
   }
+
+  @Test
+  void metricsCountAllEmbeddingsSkippedWhenRecordDropped() {
+    transform.apply(record(row("a", "b", 1), row("a", "b", 1))); // nothing changed -> dropped
+    assertMetrics(0, 2, 2); // both embedded columns saved
+  }
+
+  @Test
+  void metricsCountSkippedWhenOnlyNonEmbeddedColumnChanged() {
+    transform.apply(record(row("a", "b", 1), row("a", "b", 99))); // views only
+    assertMetrics(0, 2, 2); // title + body neither changed -> both saved
+  }
+
+  @Test
+  void metricsCountOneComputedOneSkippedWhenOneEmbeddedColumnChanges() {
+    transform.apply(record(row("a", "b", 1), row("a", "B2", 1))); // body only
+    assertMetrics(1, 1, 2);
+    assertThat(transform.metrics().getSkipRatio()).isEqualTo(0.5);
+  }
+
+  @Test
+  void metricsCountAllComputedOnCreate() {
+    transform.apply(record(null, row("a", "b", 1))); // create -> both embedded
+    assertMetrics(2, 0, 2);
+  }
+
+  @Test
+  void metricsCountNullChangedEmbeddedColumnAsSkipped() {
+    Schema optRow =
+        SchemaBuilder.struct()
+            .name("OptRow")
+            .field("body", SchemaBuilder.string().optional().build())
+            .optional()
+            .build();
+    Schema optEnv =
+        SchemaBuilder.struct()
+            .name("OptEnv")
+            .field("before", optRow)
+            .field("after", optRow)
+            .build();
+    Struct before = new Struct(optRow).put("body", "had-text");
+    Struct after = new Struct(optRow).put("body", null);
+
+    transform.apply(record(optEnv, before, after)); // body changed text -> null, no embed call
+    assertMetrics(0, 1, 1); // only "body" present in this schema
+  }
+
+  @Test
+  void metricsUnchangedForDeletesAndTombstones() {
+    transform.apply(record(row("a", "b", 1), null)); // delete -> tombstone
+    transform.apply(record(null, null)); // both null -> dropped
+    assertMetrics(0, 0, 0);
+  }
+
+  private void assertMetrics(long computed, long skipped, long possible) {
+    EmbeddingDiffMetrics m = transform.metrics();
+    assertThat(m.getEmbeddingsComputed()).as("computed").isEqualTo(computed);
+    assertThat(m.getEmbeddingsSkipped()).as("skipped").isEqualTo(skipped);
+    assertThat(m.getEmbeddingsPossible()).as("possible").isEqualTo(possible);
+    assertThat(m.getEmbeddingsPossible()).isEqualTo(computed + skipped);
+  }
 }

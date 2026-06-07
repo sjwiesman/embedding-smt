@@ -14,25 +14,31 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.transforms.Transformation;
 
 /**
- * SMT that diffs before/after, drops unchanged records, embeds changed text columns, and emits a
- * flat struct of only the changed columns plus their embeddings.
+ * The plugin's Kafka Connect Single Message Transform — the class a Connect worker instantiates and
+ * drives. It is the orchestrator of the embedding-diff pipeline: it turns a Materialize
+ * Debezium-style {@code before}/{@code after} change envelope into the minimal, embedding-enriched
+ * diff delivered to an UPSERT-mode sink, delegating the diff, output-schema construction,
+ * embedding, and metrics to its collaborators. One instance exists per Connect task.
+ *
+ * @param <R> the {@link ConnectRecord} subtype (source or sink) the worker applies this transform
+ *     to
  */
 public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Transformation<R> {
 
-  private EmbeddingDiffConfig config;
-  private String beforeField;
-  private String afterField;
+  private static final String BEFORE_FIELD = "before";
+
+  private static final String AFTER_FIELD = "after";
+
   private String suffix;
   private Set<String> embeddedColumns;
   private OutputSchemaCache schemaCache;
   private RetryingEmbeddingClient client;
   private EmbeddingProvider provider;
+  private EmbeddingDiffMetrics metrics;
 
   @Override
   public void configure(Map<String, ?> configs) {
-    this.config = new EmbeddingDiffConfig(configs);
-    this.beforeField = config.beforeField();
-    this.afterField = config.afterField();
+    var config = new EmbeddingDiffConfig(configs);
     this.suffix = config.embeddingFieldSuffix();
     this.embeddedColumns = config.embeddedColumns();
     this.schemaCache = new OutputSchemaCache(embeddedColumns, suffix);
@@ -41,13 +47,14 @@ public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Trans
     this.client =
         new RetryingEmbeddingClient(
             provider, config.maxRetries(), config.retryBackoffMs(), Thread::sleep);
+    this.metrics = new EmbeddingDiffMetrics();
+    this.metrics.register(config.metricsId());
   }
 
   /** Resolves the embedding provider by name via ServiceLoader. Overridable for tests. */
   protected EmbeddingProvider createProvider(String providerName) {
-    ServiceLoader<EmbeddingProvider> loader =
-        ServiceLoader.load(EmbeddingProvider.class, getClass().getClassLoader());
-    for (EmbeddingProvider candidate : loader) {
+    var loader = ServiceLoader.load(EmbeddingProvider.class, getClass().getClassLoader());
+    for (var candidate : loader) {
       if (candidate.name().equals(providerName)) {
         return candidate;
       }
@@ -57,26 +64,31 @@ public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Trans
 
   @Override
   public R apply(R record) {
-    if (record.value() == null) {
-      return record; // already a tombstone
+    if (isTombstone(record)) {
+      return record;
     }
-    Struct envelope = requireStruct(record.value());
-    Struct before = envelope.getStruct(beforeField);
-    Struct after = envelope.getStruct(afterField);
+    var envelope = requireStruct(record.value());
+    var before = envelope.getStruct(BEFORE_FIELD);
+    var after = envelope.getStruct(AFTER_FIELD);
 
     if (after == null) {
       // delete -> tombstone; but a record with neither before nor after is a no-op
       return before == null ? null : tombstone(record);
     }
 
-    Set<String> changed = RecordDiffer.changedColumns(before, after);
+    // Embedding calls a naive re-embed-everything pipeline would make for this record.
+    int possible = embeddedColumnsIn(after.schema());
+
+    var changed = RecordDiffer.changedColumns(before, after);
     if (changed.isEmpty()) {
-      return null; // nothing changed -> drop
+      metrics.record(0, possible);
+      return null;
     }
 
     Schema outSchema =
         schemaCache.schemaFor(before == null ? null : before.schema(), after.schema(), changed);
     Struct outValue = new Struct(outSchema);
+    int computed = 0;
     for (Field field : after.schema().fields()) {
       String name = field.name();
       if (!changed.contains(name)) {
@@ -86,6 +98,9 @@ public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Trans
       outValue.put(name, value);
       if (embeddedColumns.contains(name)) {
         outValue.put(name + suffix, embedColumn(name, value));
+        if (value != null) {
+          computed++; // embedColumn calls the provider exactly when the value is non-null
+        }
       }
     }
     if (before != null) {
@@ -101,6 +116,7 @@ public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Trans
       }
     }
 
+    metrics.record(computed, possible);
     return record.newRecord(
         record.topic(),
         record.kafkaPartition(),
@@ -109,6 +125,17 @@ public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Trans
         outSchema,
         outValue,
         record.timestamp());
+  }
+
+  /** Number of configured embedded columns present in the given schema. */
+  private int embeddedColumnsIn(Schema afterSchema) {
+    int n = 0;
+    for (String column : embeddedColumns) {
+      if (afterSchema.field(column) != null) {
+        n++;
+      }
+    }
+    return n;
   }
 
   private List<Float> embedColumn(String column, Object value) {
@@ -123,6 +150,10 @@ public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Trans
               + value.getClass().getName());
     }
     return client.embed((String) value);
+  }
+
+  private boolean isTombstone(R record) {
+    return record.value() == null;
   }
 
   private R tombstone(R record) {
@@ -152,6 +183,9 @@ public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Trans
 
   @Override
   public void close() {
+    if (metrics != null) {
+      metrics.unregister();
+    }
     if (provider != null) {
       try {
         provider.close();
@@ -159,5 +193,10 @@ public class EmbeddingDiffTransform<R extends ConnectRecord<R>> implements Trans
         throw new ConnectException("Failed to close embedding provider", e);
       }
     }
+  }
+
+  /** Exposes the metrics for same-package tests. */
+  EmbeddingDiffMetrics metrics() {
+    return metrics;
   }
 }

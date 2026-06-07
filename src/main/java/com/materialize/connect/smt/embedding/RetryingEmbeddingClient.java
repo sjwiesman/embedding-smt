@@ -4,7 +4,12 @@ import java.util.List;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 
-/** Retries transient embedding failures with exponential backoff, then fails fast. */
+/**
+ * A resilience wrapper around an {@link EmbeddingProvider}. It is the SMT's gateway to embedding
+ * calls: it adds bounded retry-with-backoff for transient failures and maps embedding exceptions to
+ * the corresponding Kafka Connect exceptions, so the transform never deals with raw provider
+ * errors.
+ */
 public final class RetryingEmbeddingClient {
 
   /** Backoff seam so tests can avoid real sleeping. */

@@ -20,13 +20,19 @@ class EmbeddingDiffConfigTest {
   @Test
   void appliesDefaults() {
     EmbeddingDiffConfig config = new EmbeddingDiffConfig(minimal());
-    assertThat(config.beforeField()).isEqualTo("before");
-    assertThat(config.afterField()).isEqualTo("after");
     assertThat(config.embeddingFieldSuffix()).isEqualTo("_embedding");
     assertThat(config.providerName()).isEqualTo("openai");
     assertThat(config.maxRetries()).isEqualTo(5);
     assertThat(config.retryBackoffMs()).isEqualTo(500L);
     assertThat(config.embeddedColumns()).containsExactly("title", "body");
+    assertThat(config.metricsId()).isNull();
+  }
+
+  @Test
+  void metricsIdRoundTrips() {
+    Map<String, String> m = minimal();
+    m.put("metrics.id", "articles-embed");
+    assertThat(new EmbeddingDiffConfig(m).metricsId()).isEqualTo("articles-embed");
   }
 
   @Test
@@ -39,12 +45,10 @@ class EmbeddingDiffConfigTest {
   @Test
   void overridesAreParsed() {
     Map<String, String> m = minimal();
-    m.put("before.field", "old");
-    m.put("after.field", "new");
     m.put("max.retries", "9");
+    m.put("retry.backoff.ms", "250");
     EmbeddingDiffConfig config = new EmbeddingDiffConfig(m);
-    assertThat(config.beforeField()).isEqualTo("old");
-    assertThat(config.afterField()).isEqualTo("new");
     assertThat(config.maxRetries()).isEqualTo(9);
+    assertThat(config.retryBackoffMs()).isEqualTo(250L);
   }
 }
