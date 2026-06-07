@@ -1,4 +1,4 @@
-package com.materialize.example;
+package com.materialize.e2e;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

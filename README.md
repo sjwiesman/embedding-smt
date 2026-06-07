@@ -1,89 +1,14 @@
 # Perfect Embeddings
 
-A Kafka Connect [Single Message Transform](https://docs.confluent.io/platform/current/connect/transforms/overview.html)
-(SMT) that turns a [Materialize](https://materialize.com/) Kafka sink's Debezium-style
-`before`/`after` envelope into a minimal, embedding-enriched diff for downstream sinks
-running in UPSERT mode.
+Perfect Embeddings is a Kafka Connect SMT that keeps search indexes and vector databases
+perfectly synchronized with the search documents maintained by Materialize.
 
-For each record it:
+Materialize emits change events that identify exactly which columns changed. The transform
+uses that information to recompute embeddings only for modified text fields while preserving
+existing embeddings for everything else.
 
-1. Reads the `before` and `after` structs from the Materialize Debezium envelope (typed
-   `Struct` via Schema Registry).
-2. Computes which columns changed (per-column comparison).
-3. **Drops** the record if nothing changed.
-4. Emits a **flat struct containing only the changed columns**. For each changed
-   column that is configured as *embedded*, it calls a remote embedding service and
-   attaches a `<col>_embedding` vector field (optional `ARRAY<FLOAT32>`).
-5. Passes the record **key** through unchanged (used as the downstream document ID).
-
-Because unchanged columns are omitted from the output, an UPSERT-mode sink merges the
-diff and leaves previously-stored values (including embeddings) untouched. Deletes
-(`after == null`) become tombstones; envelopes with neither `before` nor `after` are
-dropped.
-
-Embedding providers are pluggable via `java.util.ServiceLoader`. **OpenAI** ships in
-the box.
-
----
-
-## Embedding SPI
-
-The embedding backend is a small, dependency-free service-provider interface published as
-its own artifact, so you can implement your own provider without depending on the SMT:
-
-```xml
-<dependency>
-  <groupId>com.materialize</groupId>
-  <artifactId>perfect-embeddings-spi</artifactId>
-  <version>0.1.0</version>
-</dependency>
-```
-
-Implement `com.materialize.embedding.spi.EmbeddingProvider` and register it for
-`java.util.ServiceLoader` by adding its fully-qualified class name to
-`META-INF/services/com.materialize.embedding.spi.EmbeddingProvider`. Select it at runtime
-with `transforms.embed.provider=<your name()>`. Throw `RetriableEmbeddingException` for
-transient failures (timeouts, 429, 5xx) and `FatalEmbeddingException` for permanent ones;
-the SMT retries the former and fails fast on the latter.
-
-This repository is a Maven reactor: `perfect-embeddings-spi/` (the published SPI) and
-`perfect-embeddings-smt/` (the Connect plugin, which bundles the SPI). `mvn clean package`
-at the root builds both.
-
----
-
-## Source: Materialize Kafka sink
-
-This SMT expects its input topic to be fed by a Materialize Kafka sink declared with
-`ENVELOPE DEBEZIUM` and Avro encoding. That envelope is what gives the transform the
-`before`/`after` row states it diffs, and `KEY (…)` is what becomes the downstream
-document ID.
-
-```sql
-CREATE CONNECTION kafka_connection TO KAFKA (BROKER 'redpanda:9092', SECURITY PROTOCOL = 'PLAINTEXT');
-CREATE CONNECTION csr_connection TO CONFLUENT SCHEMA REGISTRY (URL 'http://redpanda:8081');
-
-CREATE TABLE articles (id INT, title TEXT, body TEXT, views INT);
-
-CREATE SINK articles_sink
-    FROM articles
-    INTO KAFKA CONNECTION kafka_connection (TOPIC 'articles-cdc')
-    KEY (id) NOT ENFORCED                                    -- becomes the document ID
-    FORMAT AVRO USING CONFLUENT SCHEMA REGISTRY CONNECTION csr_connection
-    ENVELOPE DEBEZIUM;                                       -- required: emits before/after
-```
-
-Requirements this places on the source:
-
-- **`ENVELOPE DEBEZIUM`** — required. `ENVELOPE UPSERT` or `ENVELOPE NONE` do **not** carry
-  the `before`/`after` pair the diff is computed from.
-- **`FORMAT AVRO USING CONFLUENT SCHEMA REGISTRY`** — the SMT operates on typed Connect
-  `Struct`s, so the topic must carry a schema (use the Avro converter on the Connect side).
-- **`KEY (…)`** — declare the primary key. It flows through as the Kafka record key and is
-  used as the upsert document ID downstream (see [Sink requirements](#sink-requirements-important)).
-
-The envelope's row states are read from the `before` and `after` fields that Materialize's
-Debezium output always emits.
+The result is an always fresh search index that remains correct as your data changes,
+without repeatedly paying to re-embed unchanged content.
 
 ---
 
@@ -97,9 +22,44 @@ Debezium output always emits.
 
 ---
 
-## Install
+## Example
 
-### From a release (recommended)
+The transform reads a topic produced by a Materialize Kafka sink.
+
+```sql
+CREATE CONNECTION kafka_connection TO KAFKA (BROKER 'redpanda:9092', SECURITY PROTOCOL = 'PLAINTEXT');
+CREATE CONNECTION csr_connection TO CONFLUENT SCHEMA REGISTRY (URL 'http://redpanda:8081');
+
+-- Article content, ingested from your operational database.
+CREATE TABLE article_content (id INT, title TEXT, body TEXT);
+
+-- A high-volume stream of page-view events.
+CREATE TABLE page_views (article_id INT);
+
+-- The search document Materialize keeps up to date: article content plus a
+-- live view count computed from the page-view stream.
+CREATE MATERIALIZED VIEW articles AS
+    SELECT c.id, c.title, c.body, count(pv.article_id) AS views
+    FROM article_content c
+    LEFT JOIN page_views pv ON pv.article_id = c.id
+    GROUP BY c.id, c.title, c.body;
+
+CREATE SINK articles_sink
+    FROM articles
+    INTO KAFKA CONNECTION kafka_connection (TOPIC 'articles-cdc')
+    KEY (id) NOT ENFORCED    -- becomes the document ID
+    FORMAT AVRO USING CONFLUENT SCHEMA REGISTRY CONNECTION csr_connection
+    ENVELOPE DEBEZIUM;
+```
+
+Materialize maintains `articles` incrementally. Each page-view event updates the `views`
+count and produces a change event for that article carrying its current values. Its `title`
+and `body` are untouched by a view, so the transform re-embeds nothing for those changes and
+recomputes an embedding only when the text itself changes.
+
+---
+
+## Install
 
 1. **Download** the plugin archive from the
    [Releases page](https://github.com/sjwiesman/embedding-smt/releases) —
@@ -127,42 +87,12 @@ Debezium output always emits.
 
 4. **Add the transform** to your sink connector config (see below).
 
-### From source
-
-```bash
-mvn clean package
-```
-
-This runs the tests and produces both a shaded plugin jar and the distributable plugin
-archive:
-
-```
-perfect-embeddings-smt/target/perfect-embeddings-smt-<version>.jar   # shaded jar (Jackson bundled)
-perfect-embeddings-smt/target/perfect-embeddings-smt-<version>.zip   # plugin folder: extract into plugin.path
-```
-
-Install the `.zip` exactly as in the release flow above, or drop the shaded jar into a
-`plugin.path/perfect-embeddings-smt/` directory yourself.
-
-> **Note:** if `java` is not on your `PATH`, point Maven at a JDK explicitly:
->
-> ```bash
-> JAVA_HOME=/path/to/jdk mvn clean package
-> ```
-
-Run the tests only:
-
-```bash
-mvn test
-```
-
----
-
 ## Connector configuration
 
 Add the SMT to the **sink** connector that reads the Materialize topic. A complete
 Elasticsearch sink config for the `articles-cdc` topic above looks like this (JSON form,
-as used by [`example/connect/connector-config.json`](example/connect/connector-config.json)):
+as registered by the end-to-end test's `registerConnector()` in
+[`EndToEndIT.java`](e2e/src/test/java/com/materialize/e2e/EndToEndIT.java)):
 
 ```json
 {
@@ -236,39 +166,35 @@ transforms.embed.openai.model=text-embedding-3-small
 
 ## Metrics
 
-The SMT registers a JMX MBean exposing how many embedding calls it **avoided** versus a
-naive pipeline that re-embeds every configured column on every change event. It's a plain
-MBean on the platform MBeanServer, so it's scraped like any other Kafka Connect JMX metric
-(Prometheus [`jmx_exporter`](https://github.com/prometheus/jmx_exporter), JConsole, etc.).
+The SMT registers a JMX MBean reporting how many embedding calls it avoided versus a naive
+pipeline that re-embeds every configured column on every change. It's a plain MBean on the
+platform MBeanServer, scraped like any other Kafka Connect JMX metric (Prometheus
+[`jmx_exporter`](https://github.com/prometheus/jmx_exporter), JConsole, etc.).
 
 **ObjectName:** `com.materialize.connect.smt.embedding:type=EmbeddingDiff,id=<metrics.id>`
 
 | Attribute | Meaning |
 |---|---|
 | `EmbeddingsComputed` | Embedding API calls actually made |
-| `EmbeddingsSkipped` | Embedding API calls avoided — dropped (unchanged) records, unchanged columns within a changed record, and changed-to-null columns |
+| `EmbeddingsSkipped` | Embedding API calls avoided: dropped (unchanged) records, unchanged columns within a changed record, and changed-to-null columns |
 | `EmbeddingsPossible` | Calls a naive re-embed-everything pipeline would have made (`= EmbeddingsComputed + EmbeddingsSkipped`) |
-| `SkipRatio` | `EmbeddingsSkipped / EmbeddingsPossible` (0.0 when idle) — e.g. `0.83` means 83% of embedding calls were avoided |
+| `SkipRatio` | `EmbeddingsSkipped / EmbeddingsPossible` (0.0 when idle): e.g. `0.83` means 83% of embedding calls were avoided |
 
-**Baseline:** `EmbeddingsPossible` counts every configured embedded column present in a
-record's `after` for each insert/update. Deletes, tombstones, and both-null records embed
-nothing, so they don't contribute. This makes `SkipRatio` the share of *embeddable* work
-the diff avoided.
+`EmbeddingsPossible` counts every configured embedded column present in each insert and
+update. Deletes, tombstones, and empty records embed nothing, so `SkipRatio` measures the
+share of embeddable work the transform avoided.
 
-Since a Connect SMT has no access to the connector name or task id, each instance gets a
-unique `id` automatically. Set `metrics.id` to give it a stable, readable name when a
-worker runs more than one instance (`tasks.max > 1`, or the SMT used by multiple
-connectors).
+A Connect SMT has no access to the connector name or task id, so each instance gets a unique
+`id` automatically. Set `metrics.id` to give it a stable, readable name when a worker runs
+more than one instance (`tasks.max > 1`, or the SMT used by multiple connectors).
 
 ---
 
-## Sink requirements (important)
+## Sink requirements
 
-The SMT's "leave unchanged columns alone" guarantee only holds if the sink performs a
-**partial update (UPSERT)** keyed by the document ID, and the **Kafka record key is the
-document ID** — which is why the example unwraps Materialize's composite Avro key with
-`ExtractField$Key` (see [Connector configuration](#connector-configuration)) before the
-sink writes it.
+The synchronization guarantee holds only if the sink applies each change as a partial update
+(UPSERT) keyed by the document ID, and the Kafka record key is that document ID. With a full
+replace, the omitted unchanged columns would be lost.
 
 **Elasticsearch sink:**
 
@@ -284,24 +210,29 @@ index.write.method=UPSERT
 behavior.on.null.values=delete
 ```
 
-With `INSERT` (the default), each record fully replaces the document — omitted columns
-would be lost, defeating the diff. `behavior.on.null.values=delete` makes the tombstones
-emitted for CDC deletes remove the document.
-
 ---
 
-## End-to-end example
+## Embedding SPI
 
-[`example/`](example/) runs the whole intended pipeline as a Testcontainers JUnit
-integration test: Materialize (`ENVELOPE DEBEZIUM` sink) → Redpanda (Kafka + Schema
-Registry) → Kafka Connect with this SMT → Elasticsearch, plus an in-JVM mock OpenAI
-endpoint. The test drives all table writes and verification from Java, asserting the
-diff/embedding-preservation behavior. It is an opt-in reactor module (Maven profile
-`example`) and requires Docker. From the repo root:
+OpenAI is the built-in provider. To use a different backend, implement the embedding
+service-provider interface (SPI), a small, dependency-free artifact you can depend on
+without pulling in the SMT.
 
-```bash
-JAVA_HOME=/opt/homebrew/opt/openjdk mvn -Pexample -pl example -am verify
+```xml
+<dependency>
+  <groupId>com.materialize</groupId>
+  <artifactId>perfect-embeddings-spi</artifactId>
+  <version>0.1.0</version>
+</dependency>
 ```
 
-See [`example/README.md`](example/README.md) for details.
+Implement `com.materialize.embedding.spi.EmbeddingProvider` and register it for
+`java.util.ServiceLoader` by adding its fully-qualified class name to
+`META-INF/services/com.materialize.embedding.spi.EmbeddingProvider`. Select it at runtime
+with `transforms.embed.provider=<your name()>`. Throw `RetriableEmbeddingException` for
+transient failures (timeouts, 429, 5xx) and `FatalEmbeddingException` for permanent ones;
+the SMT retries the former and fails fast on the latter.
 
+This repository is a Maven reactor: `perfect-embeddings-spi/` (the published SPI) and
+`perfect-embeddings-smt/` (the Connect plugin, which bundles the SPI). `mvn clean package`
+at the root builds both.

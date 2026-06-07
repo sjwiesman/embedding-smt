@@ -1,4 +1,4 @@
-package com.materialize.example;
+package com.materialize.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

@@ -41,19 +41,19 @@ dependency-free `EmbeddingProvider` SPI, package `com.materialize.embedding.spi`
 **`perfect-embeddings-smt`** (the Connect plugin, which depends on and shades the SPI).
 `mvn` at the repo root builds both.
 
-## End-to-end example
+## End-to-end test
 
-`example/` is an opt-in reactor module (Maven profile `example`) whose Testcontainers
-JUnit test `EndToEndExampleIT` runs the full pipeline (Materialize → Redpanda → Kafka
-Connect + this SMT → Elasticsearch, with an in-JVM mock OpenAI endpoint) and drives all
-table writes and verification from Java. Docker must be running. From the repo root:
+`e2e/` is an opt-in reactor module (Maven profile `e2e`) whose Testcontainers JUnit test
+`EndToEndIT` runs the full pipeline (Materialize → Redpanda → Kafka Connect + this SMT →
+Elasticsearch, with an in-JVM mock OpenAI endpoint) and drives all table writes and
+verification from Java. Docker must be running. From the repo root:
 
 ```bash
-JAVA_HOME=/opt/homebrew/opt/openjdk mvn -Pexample -pl example -am verify
+JAVA_HOME=/opt/homebrew/opt/openjdk mvn -Pe2e -pl e2e -am verify
 ```
 
-The Connect image is built from `example/connect/Dockerfile`, and CI runs this on each
-pull request. See `example/README.md`.
+The Connect image is built from `e2e/connect/Dockerfile`, and CI runs this on each
+pull request. See `e2e/README.md`.
 
 ## Architecture
 

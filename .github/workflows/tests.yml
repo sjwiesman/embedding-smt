@@ -23,7 +23,7 @@ jobs:
           cache: maven
 
       - name: Check formatting
-        run: mvn --batch-mode --no-transfer-progress -Pexample spotless:check
+        run: mvn --batch-mode --no-transfer-progress -Pe2e spotless:check
 
   # Build and test on the deployment target (Java 11). `mvn package` does not invoke
   # Spotless, so this stays on 11 to match maven.compiler.release.
@@ -42,10 +42,10 @@ jobs:
       - name: Build and test
         run: mvn --batch-mode --no-transfer-progress clean package
 
-  # The end-to-end example is an opt-in module (the `example` profile) whose
-  # Testcontainers integration test spins up Materialize, Redpanda, Kafka Connect, and
-  # Elasticsearch via Docker. ubuntu-latest runners ship a Docker daemon, so it runs here.
-  example:
+  # The end-to-end test is an opt-in module (the `e2e` profile) whose Testcontainers
+  # integration test spins up Materialize, Redpanda, Kafka Connect, and Elasticsearch via
+  # Docker. ubuntu-latest runners ship a Docker daemon, so it runs here.
+  e2e:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,5 +57,5 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Run end-to-end example
-        run: mvn --batch-mode --no-transfer-progress -Pexample -pl example -am verify
+      - name: Run end-to-end test
+        run: mvn --batch-mode --no-transfer-progress -Pe2e -pl e2e -am verify
