@@ -6,14 +6,14 @@
 
   <parent>
     <groupId>com.materialize</groupId>
-    <artifactId>embedding-parent</artifactId>
+    <artifactId>perfect-embeddings-parent</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>embedding-diff-smt</artifactId>
+  <artifactId>perfect-embeddings-smt</artifactId>
   <packaging>jar</packaging>
 
-  <name>Embedding Diff SMT</name>
+  <name>Perfect Embeddings SMT</name>
   <description>Kafka Connect Single Message Transform that converts a CDC before/after
     envelope into a minimal, embedding-enriched diff for sinks running in UPSERT mode. It
     emits only the changed columns plus a &lt;col&gt;_embedding vector for any changed
@@ -22,7 +22,7 @@
   <dependencies>
     <dependency>
       <groupId>com.materialize</groupId>
-      <artifactId>embedding-spi</artifactId>
+      <artifactId>perfect-embeddings-spi</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.kafka</groupId>

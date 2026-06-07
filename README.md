@@ -1,4 +1,4 @@
-# embedding-smt
+# Perfect Embeddings
 
 A Kafka Connect [Single Message Transform](https://docs.confluent.io/platform/current/connect/transforms/overview.html)
 (SMT) that turns a [Materialize](https://materialize.com/) Kafka sink's Debezium-style
@@ -34,7 +34,7 @@ its own artifact, so you can implement your own provider without depending on th
 ```xml
 <dependency>
   <groupId>com.materialize</groupId>
-  <artifactId>embedding-spi</artifactId>
+  <artifactId>perfect-embeddings-spi</artifactId>
   <version>0.1.0</version>
 </dependency>
 ```
@@ -46,9 +46,9 @@ with `transforms.embed.provider=<your name()>`. Throw `RetriableEmbeddingExcepti
 transient failures (timeouts, 429, 5xx) and `FatalEmbeddingException` for permanent ones;
 the SMT retries the former and fails fast on the latter.
 
-This repository is a Maven reactor: `embedding-spi/` (the published SPI) and
-`embedding-diff-smt/` (the Connect plugin, which bundles the SPI). `mvn clean package` at
-the root builds both.
+This repository is a Maven reactor: `perfect-embeddings-spi/` (the published SPI) and
+`perfect-embeddings-smt/` (the Connect plugin, which bundles the SPI). `mvn clean package`
+at the root builds both.
 
 ---
 
@@ -103,21 +103,21 @@ Debezium output always emits.
 
 1. **Download** the plugin archive from the
    [Releases page](https://github.com/sjwiesman/embedding-smt/releases) —
-   `embedding-diff-smt-<version>.zip` — and (optionally) verify its checksum:
+   `perfect-embeddings-smt-<version>.zip` — and (optionally) verify its checksum:
 
    ```bash
-   sha256sum -c embedding-diff-smt-<version>.zip.sha256
+   sha256sum -c perfect-embeddings-smt-<version>.zip.sha256
    ```
 
-2. **Extract** the `embedding-diff-smt/` folder into a directory on the Connect worker's
+2. **Extract** the `perfect-embeddings-smt/` folder into a directory on the Connect worker's
    `plugin.path`:
 
    ```bash
-   unzip embedding-diff-smt-<version>.zip -d /usr/local/share/kafka/plugins/
+   unzip perfect-embeddings-smt-<version>.zip -d /usr/local/share/kafka/plugins/
    ```
 
-   This yields `/usr/local/share/kafka/plugins/embedding-diff-smt/lib/…`. Ensure the worker
-   config includes that root:
+   This yields `/usr/local/share/kafka/plugins/perfect-embeddings-smt/lib/…`. Ensure the
+   worker config includes that root:
 
    ```properties
    plugin.path=/usr/local/share/kafka/plugins
@@ -137,12 +137,12 @@ This runs the tests and produces both a shaded plugin jar and the distributable 
 archive:
 
 ```
-target/embedding-diff-smt-<version>.jar   # shaded jar (Jackson bundled)
-target/embedding-diff-smt-<version>.zip   # plugin folder: extract into plugin.path
+perfect-embeddings-smt/target/perfect-embeddings-smt-<version>.jar   # shaded jar (Jackson bundled)
+perfect-embeddings-smt/target/perfect-embeddings-smt-<version>.zip   # plugin folder: extract into plugin.path
 ```
 
 Install the `.zip` exactly as in the release flow above, or drop the shaded jar into a
-`plugin.path/embedding-diff-smt/` directory yourself.
+`plugin.path/perfect-embeddings-smt/` directory yourself.
 
 > **Note:** if `java` is not on your `PATH`, point Maven at a JDK explicitly:
 >

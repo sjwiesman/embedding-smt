@@ -4,13 +4,13 @@
           xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.1.0 http://maven.apache.org/xsd/assembly-2.1.0.xsd">
   <!--
     Builds a self-contained Kafka Connect plugin folder, zipped for distribution via
-    GitHub Releases. The user extracts the top-level embedding-diff-smt/ directory into a
-    directory on the Connect worker's plugin.path. The shaded jar (which bundles Jackson)
+    GitHub Releases. The user extracts the top-level perfect-embeddings-smt/ directory into
+    a directory on the Connect worker's plugin.path. The shaded jar (which bundles Jackson)
     is the only artifact in lib/; the Connect API is provided by the worker.
 
     Layout:
-      embedding-diff-smt/
-      ├── lib/embedding-diff-smt-<version>.jar
+      perfect-embeddings-smt/
+      ├── lib/perfect-embeddings-smt-<version>.jar
       ├── LICENSE
       ├── NOTICE
       └── README.md
@@ -19,7 +19,7 @@
   <formats>
     <format>zip</format>
   </formats>
-  <baseDirectory>embedding-diff-smt</baseDirectory>
+  <baseDirectory>perfect-embeddings-smt</baseDirectory>
 
   <files>
     <!-- The shaded jar produced by maven-shade-plugin in the same package phase. -->

@@ -14,7 +14,7 @@ connector plugin jar; it is not a standalone app.
 ## Commands
 
 ```bash
-mvn clean package   # run tests + produce shaded plugin jar in target/
+mvn clean package   # run tests + produce shaded plugin jar in perfect-embeddings-smt/target/
 mvn test            # tests only
 mvn test -Dtest=RecordDifferTest                       # single test class
 mvn test -Dtest=EmbeddingDiffTransformTest#methodName  # single test method
@@ -33,8 +33,13 @@ older versions fail with a javac internal-API `NoSuchMethodError`.
 JAVA_HOME=/opt/homebrew/opt/openjdk mvn clean package
 ```
 
-The shaded jar (`target/embedding-diff-smt-0.1.0-SNAPSHOT.jar`) bundles Jackson but
-**not** the Connect API (`provided` scope — the runtime supplies it).
+The shaded jar (`perfect-embeddings-smt/target/perfect-embeddings-smt-0.1.0-SNAPSHOT.jar`)
+bundles Jackson but **not** the Connect API (`provided` scope — the runtime supplies it).
+
+This is a Maven reactor with two modules: **`perfect-embeddings-spi`** (the published,
+dependency-free `EmbeddingProvider` SPI, package `com.materialize.embedding.spi`) and
+**`perfect-embeddings-smt`** (the Connect plugin, which depends on and shades the SPI).
+`mvn` at the repo root builds both.
 
 ## End-to-end example
 
@@ -50,7 +55,8 @@ behavior, then exits 0. See `example/README.md`.
 
 ## Architecture
 
-The transform pipeline lives in `src/main/java/com/materialize/connect/smt/embedding/`.
+The transform pipeline lives in
+`perfect-embeddings-smt/src/main/java/com/materialize/connect/smt/embedding/`.
 `EmbeddingDiffTransform.apply()` is the orchestrator and the file to read first; it
 delegates to focused collaborators:
 
@@ -66,11 +72,13 @@ delegates to focused collaborators:
   `(beforeSchema, afterSchema, changedColumns)`. Embedding fields are always
   `ARRAY<FLOAT32>` optional. Columns dropped between before/after are copied as nullable.
 - **EmbeddingProvider** — pluggable backend resolved by `name()` via `java.util.ServiceLoader`.
-  Registered impls are listed in
-  `src/main/resources/META-INF/services/...EmbeddingProvider`. **OpenAiEmbeddingProvider**
-  (`provider/`) is the only shipped impl (`name() == "openai"`, OpenAI-compatible over
-  `java.net.http`). To add a provider: implement the interface and add its FQCN to that
-  services file.
+  Lives in the **`perfect-embeddings-spi`** module (`com.materialize.embedding.spi`), along
+  with `RetriableEmbeddingException`/`FatalEmbeddingException`. Registered impls are listed
+  in `perfect-embeddings-smt/src/main/resources/META-INF/services/com.materialize.embedding.spi.EmbeddingProvider`.
+  **OpenAiEmbeddingProvider** (`provider/`, in the SMT module) is the only shipped impl
+  (`name() == "openai"`, OpenAI-compatible over `java.net.http`). To add a provider:
+  depend on `com.materialize:perfect-embeddings-spi`, implement the interface, and register
+  its FQCN via that services file.
 - **RetryingEmbeddingClient** — wraps a provider with exponential backoff. `Sleeper` is a
   seam so tests avoid real sleeping.
 - **EmbeddingDiffConfig** — typed `AbstractConfig` view; `CONFIG_DEF` is the single source

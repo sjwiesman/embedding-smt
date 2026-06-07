@@ -6,17 +6,17 @@
 
   <parent>
     <groupId>com.materialize</groupId>
-    <artifactId>embedding-parent</artifactId>
+    <artifactId>perfect-embeddings-parent</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
 
-  <artifactId>embedding-spi</artifactId>
+  <artifactId>perfect-embeddings-spi</artifactId>
   <packaging>jar</packaging>
 
-  <name>Embedding SPI</name>
+  <name>Perfect Embeddings SPI</name>
   <description>Service-provider interface for pluggable embedding backends: implement
     EmbeddingProvider and register it via java.util.ServiceLoader. Consumed by the
-    embedding-diff Kafka Connect SMT and implementable by third parties.</description>
+    Perfect Embeddings Kafka Connect SMT and implementable by third parties.</description>
 
   <dependencies>
     <dependency>

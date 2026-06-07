@@ -36,13 +36,13 @@ jobs:
         run: mvn --batch-mode --no-transfer-progress clean package
 
       - name: Checksum
-        working-directory: target
-        run: sha256sum embedding-diff-smt-${{ steps.version.outputs.version }}.zip > embedding-diff-smt-${{ steps.version.outputs.version }}.zip.sha256
+        working-directory: perfect-embeddings-smt/target
+        run: sha256sum perfect-embeddings-smt-${{ steps.version.outputs.version }}.zip > perfect-embeddings-smt-${{ steps.version.outputs.version }}.zip.sha256
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/embedding-diff-smt-${{ steps.version.outputs.version }}.zip
-            target/embedding-diff-smt-${{ steps.version.outputs.version }}.zip.sha256
+            perfect-embeddings-smt/target/perfect-embeddings-smt-${{ steps.version.outputs.version }}.zip
+            perfect-embeddings-smt/target/perfect-embeddings-smt-${{ steps.version.outputs.version }}.zip.sha256
           generate_release_notes: true

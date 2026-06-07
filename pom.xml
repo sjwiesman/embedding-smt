@@ -5,12 +5,12 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.materialize</groupId>
-  <artifactId>embedding-parent</artifactId>
+  <artifactId>perfect-embeddings-parent</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
-  <name>Embedding Parent</name>
-  <description>Reactor for the embedding SPI and the embedding-diff Kafka Connect SMT.</description>
+  <name>Perfect Embeddings</name>
+  <description>Reactor for the Perfect Embeddings SPI and Kafka Connect SMT.</description>
   <url>https://github.com/sjwiesman/embedding-smt</url>
 
   <licenses>
@@ -36,8 +36,8 @@
   </scm>
 
   <modules>
-    <module>embedding-spi</module>
-    <module>embedding-diff-smt</module>
+    <module>perfect-embeddings-spi</module>
+    <module>perfect-embeddings-smt</module>
   </modules>
 
   <properties>
@@ -55,7 +55,7 @@
     <dependencies>
       <dependency>
         <groupId>com.materialize</groupId>
-        <artifactId>embedding-spi</artifactId>
+        <artifactId>perfect-embeddings-spi</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
