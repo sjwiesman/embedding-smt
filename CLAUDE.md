@@ -96,8 +96,9 @@ retry behavior — preserve it when editing providers or the client:
 
 ## Conventions
 
-- Java 17 (`release 17`), Maven, JUnit 5 + AssertJ. Provider HTTP is tested against
-  `mockwebserver`.
+- Java 11 (`release 11` — keep source at the Java 11 language/API level; e.g. classic
+  `switch` statements, no text blocks/records), Maven, JUnit 5 + AssertJ. Provider HTTP is
+  tested against `mockwebserver`.
 - Collaborators are constructor-injected and seams are exposed (`createProvider` is
   `protected` and overridable; `Sleeper` is injectable) specifically for unit testing —
   follow that pattern rather than reaching for static state or real network/sleep calls.

@@ -61,12 +61,18 @@ public final class OutputSchemaCache {
   }
 
   private static Schema nullableCopy(Schema schema) {
-    var builder =
-        switch (schema.type()) {
-          case ARRAY -> SchemaBuilder.array(schema.valueSchema());
-          case MAP -> SchemaBuilder.map(schema.keySchema(), schema.valueSchema());
-          default -> SchemaBuilder.type(schema.type());
-        };
+    SchemaBuilder builder;
+    switch (schema.type()) {
+      case ARRAY:
+        builder = SchemaBuilder.array(schema.valueSchema());
+        break;
+      case MAP:
+        builder = SchemaBuilder.map(schema.keySchema(), schema.valueSchema());
+        break;
+      default:
+        builder = SchemaBuilder.type(schema.type());
+        break;
+    }
     if (schema.name() != null) {
       builder.name(schema.name());
     }

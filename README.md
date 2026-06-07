@@ -91,7 +91,7 @@ Debezium output always emits.
 
 | | |
 |---|---|
-| **Java** | 17+ (compiled to `release 17`) |
+| **Java** | 11+ (compiled to `release 11`) |
 | **Kafka / Connect** | built against `connect-api` 3.8.1; works on any Connect runtime with [KIP-146](https://cwiki.apache.org/confluence/display/KAFKA/KIP-146+-+Classloading+Isolation+in+Connect) classloader isolation (Apache Kafka 2.3+ / Confluent Platform 5.3+) |
 | **Packaging** | self-contained plugin folder; bundles Jackson, Connect API is `provided` by the worker |
 

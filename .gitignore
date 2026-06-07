@@ -2,3 +2,4 @@ example/mock-embeddings/__pycache__/
 example/scripts/__pycache__/
 target/
 .idea/
+.flattened-pom.xml

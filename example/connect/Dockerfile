@@ -1,4 +1,4 @@
-FROM maven:3.9.9-eclipse-temurin-17 AS smt-build
+FROM maven:3.9.9-eclipse-temurin-11 AS smt-build
 
 WORKDIR /build
 
