@@ -1,5 +1,6 @@
 package com.materialize.connect.smt.embedding;
 
+import com.materialize.embedding.spi.EmbeddingProvider;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;

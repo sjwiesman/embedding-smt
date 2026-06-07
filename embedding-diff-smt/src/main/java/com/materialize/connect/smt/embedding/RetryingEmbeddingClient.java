@@ -1,5 +1,8 @@
 package com.materialize.connect.smt.embedding;
 
+import com.materialize.embedding.spi.EmbeddingProvider;
+import com.materialize.embedding.spi.FatalEmbeddingException;
+import com.materialize.embedding.spi.RetriableEmbeddingException;
 import java.util.List;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;

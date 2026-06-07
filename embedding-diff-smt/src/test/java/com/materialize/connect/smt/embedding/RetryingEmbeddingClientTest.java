@@ -3,6 +3,9 @@ package com.materialize.connect.smt.embedding;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.materialize.embedding.spi.EmbeddingProvider;
+import com.materialize.embedding.spi.FatalEmbeddingException;
+import com.materialize.embedding.spi.RetriableEmbeddingException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;

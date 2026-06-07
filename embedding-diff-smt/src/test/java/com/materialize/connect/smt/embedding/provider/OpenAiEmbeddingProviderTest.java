@@ -3,8 +3,8 @@ package com.materialize.connect.smt.embedding.provider;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.materialize.connect.smt.embedding.FatalEmbeddingException;
-import com.materialize.connect.smt.embedding.RetriableEmbeddingException;
+import com.materialize.embedding.spi.FatalEmbeddingException;
+import com.materialize.embedding.spi.RetriableEmbeddingException;
 import java.util.List;
 import java.util.Map;
 import okhttp3.mockwebserver.MockResponse;

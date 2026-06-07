@@ -3,6 +3,7 @@ package com.materialize.connect.smt.embedding;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.materialize.embedding.spi.EmbeddingProvider;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
