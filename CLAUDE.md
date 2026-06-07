@@ -43,15 +43,17 @@ dependency-free `EmbeddingProvider` SPI, package `com.materialize.embedding.spi`
 
 ## End-to-end example
 
-`example/` runs the full pipeline (Materialize → Redpanda → Kafka Connect + this SMT →
-Elasticsearch, with a mock OpenAI endpoint) via Docker Compose. From the repo root:
+`example/` is an opt-in reactor module (Maven profile `example`) whose Testcontainers
+JUnit test `EndToEndExampleIT` runs the full pipeline (Materialize → Redpanda → Kafka
+Connect + this SMT → Elasticsearch, with an in-JVM mock OpenAI endpoint) and drives all
+table writes and verification from Java. Docker must be running. From the repo root:
 
 ```bash
-docker compose -f example/docker-compose.yml up --build
+JAVA_HOME=/opt/homebrew/opt/openjdk mvn -Pexample -pl example -am verify
 ```
 
-It auto-bootstraps and a `verify` container asserts the diff/embedding-preservation
-behavior, then exits 0. See `example/README.md`.
+The Connect image is built from `example/connect/Dockerfile`, and CI runs this on each
+pull request. See `example/README.md`.
 
 ## Architecture
 

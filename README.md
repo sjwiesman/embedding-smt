@@ -292,13 +292,15 @@ emitted for CDC deletes remove the document.
 
 ## End-to-end example
 
-[`example/`](example/) runs the whole intended pipeline with Docker Compose: Materialize
-(`ENVELOPE DEBEZIUM` sink) → Redpanda (Kafka + Schema Registry) → Kafka Connect with this
-SMT → Elasticsearch, plus a mock OpenAI endpoint. A `verify` container asserts the
-diff/embedding-preservation behavior and exits 0. From the repo root:
+[`example/`](example/) runs the whole intended pipeline as a Testcontainers JUnit
+integration test: Materialize (`ENVELOPE DEBEZIUM` sink) → Redpanda (Kafka + Schema
+Registry) → Kafka Connect with this SMT → Elasticsearch, plus an in-JVM mock OpenAI
+endpoint. The test drives all table writes and verification from Java, asserting the
+diff/embedding-preservation behavior. It is an opt-in reactor module (Maven profile
+`example`) and requires Docker. From the repo root:
 
 ```bash
-docker compose -f example/docker-compose.yml up --build
+JAVA_HOME=/opt/homebrew/opt/openjdk mvn -Pexample -pl example -am verify
 ```
 
 See [`example/README.md`](example/README.md) for details.
