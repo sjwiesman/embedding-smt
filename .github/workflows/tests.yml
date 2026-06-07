@@ -7,6 +7,25 @@ on:
     branches: [main]
 
 jobs:
+  # google-java-format 1.35.0 (pinned for local JDK 26+) reaches for javac internals
+  # that JDK 17 lacks, so the formatting check runs on a newer JDK than the build.
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Check formatting
+        run: mvn --batch-mode --no-transfer-progress spotless:check
+
+  # Build and test on the deployment target (Java 17). `mvn package` does not invoke
+  # Spotless, so this stays on 17 to match maven.compiler.release.
   test:
     runs-on: ubuntu-latest
     steps:
@@ -18,9 +37,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
-
-      - name: Check formatting
-        run: mvn --batch-mode --no-transfer-progress spotless:check
 
       - name: Build and test
         run: mvn --batch-mode --no-transfer-progress clean package
