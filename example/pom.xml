@@ -21,6 +21,7 @@
     <testcontainers.version>1.20.4</testcontainers.version>
     <awaitility.version>4.2.2</awaitility.version>
     <postgresql.version>42.7.4</postgresql.version>
+    <slf4j.version>1.7.36</slf4j.version>
   </properties>
 
   <dependencyManagement>
@@ -87,6 +88,14 @@
       <groupId>org.awaitility</groupId>
       <artifactId>awaitility</artifactId>
       <version>${awaitility.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- SLF4J binding so Testcontainers' container logs and this test's teardown
+         diagnostics are visible (otherwise SLF4J falls back to a NOP logger). -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>${slf4j.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
