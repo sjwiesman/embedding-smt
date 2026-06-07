@@ -1,4 +1,4 @@
-package com.materialize.example;
+package com.materialize.e2e;
 
 import static java.time.Duration.ofMinutes;
 import static java.time.Duration.ofSeconds;
@@ -40,9 +40,9 @@ import org.testcontainers.utility.DockerImageName;
  * table writes over JDBC and asserts Elasticsearch state, mirroring the assertions the old Python
  * verifier made.
  */
-class EndToEndExampleIT {
+class EndToEndIT {
 
-  private static final Logger LOG = LoggerFactory.getLogger(EndToEndExampleIT.class);
+  private static final Logger LOG = LoggerFactory.getLogger(EndToEndIT.class);
 
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final HttpClient HTTP = HttpClient.newHttpClient();
@@ -103,7 +103,7 @@ class EndToEndExampleIT {
             .withFileFromPath("README.md", repoRoot.resolve("README.md"))
             .withFileFromPath("perfect-embeddings-spi", repoRoot.resolve("perfect-embeddings-spi"))
             .withFileFromPath("perfect-embeddings-smt", repoRoot.resolve("perfect-embeddings-smt"))
-            .withFileFromPath("Dockerfile", repoRoot.resolve("example/connect/Dockerfile"));
+            .withFileFromPath("Dockerfile", repoRoot.resolve("e2e/connect/Dockerfile"));
 
     connect =
         new GenericContainer<>(connectImage)
@@ -168,10 +168,7 @@ class EndToEndExampleIT {
   void diffTransformPreservesUnchangedEmbeddings() throws Exception {
     applyMaterializeSetup();
     registerConnector();
-    await()
-        .atMost(ofMinutes(2))
-        .pollInterval(ofSeconds(2))
-        .until(EndToEndExampleIT::connectorRunning);
+    await().atMost(ofMinutes(2)).pollInterval(ofSeconds(2)).until(EndToEndIT::connectorRunning);
 
     // 1. Insert: full document with both embeddings.
     runSql("INSERT INTO articles VALUES (1, 'Hello world', 'First body text', 10);");
@@ -180,7 +177,7 @@ class EndToEndExampleIT {
             .atMost(ofMinutes(2))
             .pollInterval(ofSeconds(2))
             .until(
-                EndToEndExampleIT::fetchDoc,
+                EndToEndIT::fetchDoc,
                 doc ->
                     doc != null
                         && "Hello world".equals(text(doc, "title"))

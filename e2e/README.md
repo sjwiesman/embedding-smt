@@ -1,7 +1,7 @@
-# End-to-End Example
+# End-to-End Test
 
 This module runs the SMT end to end as a Testcontainers-based JUnit integration test
-(`EndToEndExampleIT`). It orchestrates the full pipeline from Java:
+(`EndToEndIT`). It orchestrates the full pipeline from Java:
 
 - Materialize emulator produces row changes from an `articles` table.
 - Materialize sinks those changes to Redpanda using `ENVELOPE DEBEZIUM`.
@@ -15,13 +15,13 @@ so there are no shell scripts or separate verifier container.
 
 ## Run
 
-The example is an opt-in reactor module behind the `example` Maven profile, so a normal
+This is an opt-in reactor module behind the `e2e` Maven profile, so a normal
 `mvn package` does not build or run it. Docker must be running.
 
 From the repository root:
 
 ```bash
-JAVA_HOME=/opt/homebrew/opt/openjdk mvn -Pexample -pl example -am verify
+JAVA_HOME=/opt/homebrew/opt/openjdk mvn -Pe2e -pl e2e -am verify
 ```
 
 The first run is slow: it builds the Kafka Connect image (which compiles the SMT and
@@ -36,7 +36,7 @@ The test asserts:
 
 ## How it works
 
-- `EndToEndExampleIT` — starts the containers on a shared Docker network, applies the
+- `EndToEndIT` — starts the containers on a shared Docker network, applies the
   Materialize DDL, registers the connector via the Connect REST API, performs the
   insert/update sequence, and asserts the indexed document with AssertJ + Awaitility.
 - `MockEmbeddingsServer` — an in-JVM OpenAI-compatible endpoint whose embedding vector is

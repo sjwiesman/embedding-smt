@@ -140,9 +140,9 @@
 
   <profiles>
     <profile>
-      <id>example</id>
+      <id>e2e</id>
       <modules>
-        <module>example</module>
+        <module>e2e</module>
       </modules>
     </profile>
   </profiles>
